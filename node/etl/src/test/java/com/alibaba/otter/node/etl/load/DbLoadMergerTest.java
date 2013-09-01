@@ -1,16 +1,18 @@
 /*
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
+ * Copyright (C) 2010-2101 Alibaba Group Holding Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package com.alibaba.otter.node.etl.load;
 
@@ -226,6 +228,34 @@ public class DbLoadMergerTest extends BaseDbTest {
         Map<RowKey, EventData> mergeMap = new MapMaker().makeMap();
         DbLoadMerger.merge(makeUpdateEventData(KEY_VALUE_NEW1, KEY_VALUE_NEW2), mergeMap);
         DbLoadMerger.merge(makeUpdateEventData(KEY_VALUE_NEW2, KEY_VALUE), mergeMap);
+        DbLoadMerger.merge(makeInsertEventData(), mergeMap);
+
+        for (Entry<RowKey, EventData> entry : mergeMap.entrySet()) {
+            RowKey key = entry.getKey();
+            EventColumn keyColumn = key.getKeys().get(0);
+            Assert.assertEquals(KEY_VALUE, keyColumn.getColumnValue());
+            Assert.assertEquals(KEY_NAME, keyColumn.getColumnName());
+
+            EventData eventData = entry.getValue();
+            Assert.assertEquals(SCHEMA_NAME, eventData.getSchemaName());
+            Assert.assertEquals(TABLE_NAME, eventData.getTableName());
+            Assert.assertEquals(TABLE_ID, eventData.getTableId());
+            Assert.assertEquals(EventType.INSERT, eventData.getEventType());
+
+            List<EventColumn> oldKeys = eventData.getOldKeys();
+            List<EventColumn> keys = eventData.getKeys();
+
+            Assert.assertNotSame(oldKeys, keys);
+        }
+    }
+
+    /**
+     * 测试在主键发生变化后的merge操作，Insert/Insert
+     */
+    @Test
+    public void testMergeWithUpdateKeyOfII() {
+        Map<RowKey, EventData> mergeMap = new MapMaker().makeMap();
+        DbLoadMerger.merge(makeInsertEventData(), mergeMap);
         DbLoadMerger.merge(makeInsertEventData(), mergeMap);
 
         for (Entry<RowKey, EventData> entry : mergeMap.entrySet()) {

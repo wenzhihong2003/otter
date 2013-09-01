@@ -1,16 +1,18 @@
 /*
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
+ * Copyright (C) 2010-2101 Alibaba Group Holding Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package com.alibaba.otter.node.etl.select.selector.canal;
 
@@ -30,10 +32,16 @@ import org.slf4j.MDC;
 import org.springframework.util.CollectionUtils;
 
 import com.alibaba.otter.canal.extend.communication.CanalConfigClient;
+import com.alibaba.otter.canal.extend.ha.MediaHAController;
 import com.alibaba.otter.canal.instance.core.CanalInstance;
 import com.alibaba.otter.canal.instance.core.CanalInstanceGenerator;
 import com.alibaba.otter.canal.instance.manager.CanalInstanceWithManager;
 import com.alibaba.otter.canal.instance.manager.model.Canal;
+import com.alibaba.otter.canal.instance.manager.model.CanalParameter.HAMode;
+import com.alibaba.otter.canal.parse.CanalEventParser;
+import com.alibaba.otter.canal.parse.ha.CanalHAController;
+import com.alibaba.otter.canal.parse.inbound.mysql.MysqlEventParser;
+import com.alibaba.otter.canal.parse.support.AuthenticationInfo;
 import com.alibaba.otter.canal.protocol.CanalEntry.Entry;
 import com.alibaba.otter.canal.protocol.ClientIdentity;
 import com.alibaba.otter.canal.server.embeded.CanalServerWithEmbeded;
@@ -118,9 +126,50 @@ public class CanalEmbedSelector implements OtterSelector {
                 otterAlarmHandler.setPipelineId(pipelineId);
                 OtterContextLocator.autowire(otterAlarmHandler); // 注入一下spring资源
                 //设置下slaveId，保证多个piplineId下重复引用时不重复
-                canal.getCanalParameter().setSlaveId(canal.getCanalParameter().getSlaveId() + pipelineId);
+                long slaveId = 10000;//默认基数
+                if (canal.getCanalParameter().getSlaveId() != null) {
+                    slaveId = canal.getCanalParameter().getSlaveId();
+                }
+                canal.getCanalParameter().setSlaveId(slaveId + pipelineId);
 
-                CanalInstanceWithManager instance = new CanalInstanceWithManager(canal, filter);
+                CanalInstanceWithManager instance = new CanalInstanceWithManager(canal, filter) {
+
+                    protected CanalHAController initHaController() {
+                        HAMode haMode = parameters.getHaMode();
+                        if (haMode.isMedia()) {
+                            return new MediaHAController(parameters.getMediaGroup(), parameters.getDbUsername(),
+                                                         parameters.getDbPassword(),
+                                                         parameters.getDefaultDatabaseName());
+                        } else {
+                            return super.initHaController();
+                        }
+                    }
+
+                    @Override
+                    protected void startEventParserInternal(CanalEventParser parser) {
+                        super.startEventParserInternal(parser);
+
+                        if (eventParser instanceof MysqlEventParser) {
+                            MysqlEventParser mysqlEventParser = (MysqlEventParser) eventParser;
+                            CanalHAController haController = mysqlEventParser.getHaController();
+
+                            if (haController instanceof MediaHAController) {
+                                ((MediaHAController) haController).setCanalHASwitchable(mysqlEventParser);
+                            }
+
+                            if (!haController.isStart()) {
+                                haController.start();
+                            }
+
+                            // 基于media的Ha，直接从tddl中获取数据库信息
+                            if (haController instanceof MediaHAController) {
+                                AuthenticationInfo authenticationInfo = ((MediaHAController) haController).getAvailableAuthenticationInfo();
+                                ((MysqlEventParser) eventParser).setMasterInfo(authenticationInfo);
+                            }
+                        }
+                    }
+
+                };
                 instance.setAlarmHandler(otterAlarmHandler);
 
                 CanalEventSink eventSink = instance.getEventSink();

@@ -10,7 +10,7 @@
 	<artifactId>otter.parent</artifactId>
 	<packaging>pom</packaging>
 	<name>otter</name>
-	<version>4.2.0</version>
+	<version>4.2.1-SNAPSHOT</version>
 	<inceptionYear>2011</inceptionYear>
 	<url>http://github.com/alibaba/otter</url>
 	<organization>
@@ -64,8 +64,9 @@
 			</snapshots>
 		</repository>
 		<repository>
-			<id>alibaba</id>
-			<url>http://code.alibabatech.com/mvn/releases/</url>
+			<id>jtester-maven</id>
+			<name>JTester</name>
+			<url>http://jtester.googlecode.com/svn/m2/</url>
 			<releases>
 				<enabled>true</enabled>
 			</releases>
@@ -74,22 +75,29 @@
 			</snapshots>
 		</repository>
 		<repository>
-			<id>jtester-maven</id>
-			<name>JTester</name>
-			<url>http://jtester.googlecode.com/svn/m2/</url>
+			<id>sonatype</id>
+			<name>sonatype</name>
+			<url>https://oss.sonatype.org/content/repositories/snapshots</url>
+			<releases>
+				<enabled>false</enabled>
+			</releases>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
 		</repository>
 	</repositories>
 	
 	<properties>
 		<!--maven properties-->
-        <maven.test.skip>false</maven.test.skip>
+        <maven.test.skip>true</maven.test.skip>
+        <downloadSources>true</downloadSources>
         <!-- compiler settings properties -->
         <java_source_version>1.6</java_source_version>
         <java_target_version>1.6</java_target_version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<spring-version>3.1.2.RELEASE</spring-version>
 		<jetty_verion>8.1.7.v20120910</jetty_verion>
-		<otter_canal_version>1.0.8-SNAPSHOT</otter_canal_version>
+		<otter_canal_version>1.0.9-SNAPSHOT</otter_canal_version>
 	</properties>
 	
 	<modules>
@@ -160,6 +168,14 @@
 						<groupId>org.slf4j</groupId>
 						<artifactId>slf4j-api</artifactId>
 				  </exclusion>
+				  <exclusion>
+						<groupId>log4j</groupId>
+						<artifactId>log4j</artifactId>
+				  </exclusion>
+				  <exclusion>
+						<groupId>jline</groupId>
+						<artifactId>jline</artifactId>
+				  </exclusion>
 				</exclusions>
 			</dependency>
 			<dependency>
@@ -178,6 +194,8 @@
 				<groupId>com.oracle</groupId>
 				<artifactId>ojdbc14</artifactId>
 				<version>10.2.0.3.0</version>
+				<scope>system</scope>
+				<systemPath>${user.dir}/lib/ojdbc14-10.2.0.3.0.jar</systemPath>
 			</dependency>
 			<!-- spring -->
 			<dependency>

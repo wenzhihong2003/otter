@@ -4,13 +4,13 @@
 	<parent>
 	    <groupId>com.alibaba.otter</groupId>
 	    <artifactId>otter.parent</artifactId>
-	    <version>4.2.0</version>
+	    <version>4.2.1-SNAPSHOT</version>
 	</parent>
 	<groupId>com.alibaba.otter</groupId>
 	<artifactId>manager</artifactId>
 	<packaging>pom</packaging>
 	<name>manager module for otter</name>
-	<version>4.2.0</version>
+	<version>4.2.1-SNAPSHOT</version>
 	<url>http://github.com/alibaba/otter</url>
 	
 	<modules>
@@ -20,8 +20,6 @@
 	</modules>
 	
 	<properties>
-		<!--maven properties-->
-        <maven.test.skip>false</maven.test.skip>
 		<webx_version>3.2.0</webx_version>
 	</properties>
 	
@@ -32,6 +30,16 @@
                 <groupId>com.alibaba.citrus</groupId>
                 <artifactId>citrus-webx-all</artifactId>
                 <version>${webx_version}</version>
+                <exclusions>
+				  <exclusion>
+					<groupId>org.codehaus.groovy</groupId>
+					<artifactId>groovy-all</artifactId>
+				  </exclusion>
+				  <exclusion>
+					<groupId>org.freemarker</groupId>
+					<artifactId>freemarker</artifactId>
+				  </exclusion>
+				</exclusions>
             </dependency>
 			<!-- spring -->
             <dependency>

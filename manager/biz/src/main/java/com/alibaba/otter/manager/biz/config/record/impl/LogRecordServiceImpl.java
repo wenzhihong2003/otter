@@ -1,16 +1,18 @@
 /*
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
+ * Copyright (C) 2010-2101 Alibaba Group Holding Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package com.alibaba.otter.manager.biz.config.record.impl;
 
@@ -21,7 +23,6 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.alibaba.otter.shared.common.utils.Assert;
 import com.alibaba.otter.manager.biz.common.exceptions.ManagerException;
 import com.alibaba.otter.manager.biz.config.channel.ChannelService;
 import com.alibaba.otter.manager.biz.config.record.LogRecordService;
@@ -30,6 +31,7 @@ import com.alibaba.otter.manager.biz.config.record.dal.dataobject.LogRecordDO;
 import com.alibaba.otter.shared.common.model.config.channel.Channel;
 import com.alibaba.otter.shared.common.model.config.pipeline.Pipeline;
 import com.alibaba.otter.shared.common.model.config.record.LogRecord;
+import com.alibaba.otter.shared.common.utils.Assert;
 import com.alibaba.otter.shared.common.utils.JsonUtils;
 import com.alibaba.otter.shared.communication.core.model.Event;
 import com.alibaba.otter.shared.communication.model.arbitrate.NodeAlarmEvent;
@@ -179,14 +181,23 @@ public class LogRecordServiceImpl implements LogRecordService {
         try {
 
             logRecord.setId(logRecordDo.getId());
-
             if (logRecordDo.getPipelineId() > 0 && logRecordDo.getChannelId() > 0) {
-                Channel channel = channelService.findByPipelineId(logRecordDo.getPipelineId());
-                logRecord.setChannel(channel);
-                for (Pipeline pipeline : channel.getPipelines()) {
-                    if (pipeline.getId().equals(logRecordDo.getPipelineId())) {
-                        logRecord.setPipeline(pipeline);
+                try {
+                    Channel channel = channelService.findByPipelineId(logRecordDo.getPipelineId());
+                    logRecord.setChannel(channel);
+                    for (Pipeline pipeline : channel.getPipelines()) {
+                        if (pipeline.getId().equals(logRecordDo.getPipelineId())) {
+                            logRecord.setPipeline(pipeline);
+                        }
                     }
+                } catch (Exception e) {
+                    // 可能历史的log记录对应的channel/pipeline已经被删除了，直接忽略吧
+                    Channel channel = new Channel();
+                    channel.setId(0l);
+                    logRecord.setChannel(channel);
+                    Pipeline pipeline = new Pipeline();
+                    pipeline.setId(0l);
+                    logRecord.setPipeline(pipeline);
                 }
             } else {
                 Channel channel = new Channel();
