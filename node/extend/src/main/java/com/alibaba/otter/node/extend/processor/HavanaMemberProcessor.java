@@ -1,16 +1,18 @@
 /*
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
+ * Copyright (C) 2010-2101 Alibaba Group Holding Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package com.alibaba.otter.node.extend.processor;
 
@@ -29,7 +31,7 @@ import com.alibaba.otter.shared.etl.model.EventData;
  */
 public class HavanaMemberProcessor extends AbstractEventProcessor {
 
-    public EventData process(EventData eventData) {
+    public boolean process(EventData eventData) {
         EventColumn belong = getColumn(eventData, "belong_to");
         if (belong == null) {
             return doProcess(eventData);
@@ -67,10 +69,10 @@ public class HavanaMemberProcessor extends AbstractEventProcessor {
             }
         }
 
-        return null;
+        return false;
     }
 
-    private EventData doProcess(EventData eventData) {
+    private boolean doProcess(EventData eventData) {
         if (!eventData.getEventType().isDelete()) {
             // 缺省值为“OT:时间戳:随机串”.
             EventColumn writeSource = getColumn(eventData, "write_source");
@@ -79,6 +81,6 @@ public class HavanaMemberProcessor extends AbstractEventProcessor {
                 writeSource.setColumnValue("OT:" + System.currentTimeMillis() + ":" + RandomUtils.nextInt(10000));
             }
         }
-        return eventData;
+        return true;
     }
 }

@@ -1,16 +1,18 @@
 /*
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
+ * Copyright (C) 2010-2101 Alibaba Group Holding Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package com.alibaba.otter.shared.etl.model;
 
@@ -47,8 +49,9 @@ public class EventColumn implements Serializable {
      * 因为FileResolver/EventProcessor会需要所有字段数据做分析，但又想保留按需字段同步模式
      * 
      * <pre>
+     * 可以简单理解isUpdate代表是否需要在目标库执行数据变更，针对update有效，默认insert/delete为true
      * 1. row模式，所有字段均为updated
-     * 2. field模式，通过store/db反查得到的结果，均为updated
+     * 2. field模式，通过db反查得到的结果，均为updated
      * 3. 其余场景，根据判断是否变更过，设置updated数据
      * </pre>
      */
@@ -72,7 +75,7 @@ public class EventColumn implements Serializable {
 
     public String getColumnValue() {
         if (isNull) {
-            // 如果为null值，强制设置为null, eromanga主要是走protobuf协议，String值默认为空字符，无法标示为null对象
+            // 如果为null值，强制设置为null, canal主要是走protobuf协议，String值默认为空字符，无法标示为null对象
             columnValue = null;
             return null;
         } else {

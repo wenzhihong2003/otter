@@ -1,34 +1,41 @@
 /*
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
+ * Copyright (C) 2010-2101 Alibaba Group Holding Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package com.alibaba.otter.node.etl.common.pipe.impl.http;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.text.MessageFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.ClassUtils;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.util.CollectionUtils;
 
-import com.alibaba.otter.node.etl.common.io.EncryptUtils;
+import com.alibaba.fastjson.JSONReader;
 import com.alibaba.otter.node.etl.common.io.EncryptedData;
 import com.alibaba.otter.node.etl.common.io.download.DataRetriever;
 import com.alibaba.otter.node.etl.common.pipe.PipeDataType;
@@ -38,8 +45,6 @@ import com.alibaba.otter.shared.common.model.config.channel.ChannelParameter.Syn
 import com.alibaba.otter.shared.common.model.config.channel.ChannelParameter.SyncMode;
 import com.alibaba.otter.shared.common.model.config.pipeline.Pipeline;
 import com.alibaba.otter.shared.common.utils.ByteUtils;
-import com.alibaba.otter.shared.common.utils.JsonUtils;
-import com.alibaba.otter.shared.common.utils.NioUtils;
 import com.alibaba.otter.shared.etl.model.DbBatch;
 import com.alibaba.otter.shared.etl.model.EventColumn;
 import com.alibaba.otter.shared.etl.model.EventData;
@@ -69,7 +74,6 @@ public class RowDataHttpPipe extends AbstractHttpPipe<DbBatch, HttpPipeKey> {
     // ======================== help method ===================
     // 保存对应的dbBatch
     private HttpPipeKey saveDbBatch(DbBatch dbBatch) {
-        Map json = new HashMap();// 序列化对象
         RowBatch rowBatch = dbBatch.getRowBatch();
         // 转化为proto对象
         BatchProto.RowBatch.Builder rowBatchBuilder = BatchProto.RowBatch.newBuilder();
@@ -114,53 +118,61 @@ public class RowDataHttpPipe extends AbstractHttpPipe<DbBatch, HttpPipeKey> {
             rowBatchBuilder.addRows(rowDataBuilder.build());// 添加一条rowData记录
         }
 
-        json.put(ClassUtils.getShortClassName(rowBatch.getClass()), rowBatchBuilder.build().toByteArray());
-
         // 处理下FileBatch
         FileBatch fileBatch = dbBatch.getFileBatch();
-        if (fileBatch != null) {
-            BatchProto.FileBatch.Builder fileBatchBuilder = BatchProto.FileBatch.newBuilder();
-            fileBatchBuilder.setIdentity(build(fileBatch.getIdentity()));
-            // 构造对应的proto对象
-            for (FileData fileData : fileBatch.getFiles()) {
-                BatchProto.FileData.Builder fileDataBuilder = BatchProto.FileData.newBuilder();
-                fileDataBuilder.setPairId(fileData.getPairId());
-                fileDataBuilder.setTableId(fileData.getTableId());
-                if (fileData.getNameSpace() != null) {
-                    fileDataBuilder.setNamespace(fileData.getNameSpace());
-                }
-                if (fileData.getPath() != null) {
-                    fileDataBuilder.setPath(fileData.getPath());
-                }
-                fileDataBuilder.setEventType(fileData.getEventType().getValue());
-                fileDataBuilder.setSize(fileData.getSize());
-                fileDataBuilder.setLastModifiedTime(fileData.getLastModifiedTime());
-
-                fileBatchBuilder.addFiles(fileDataBuilder.build());// 添加一条fileData记录
+        BatchProto.FileBatch.Builder fileBatchBuilder = null;
+        fileBatchBuilder = BatchProto.FileBatch.newBuilder();
+        fileBatchBuilder.setIdentity(build(fileBatch.getIdentity()));
+        // 构造对应的proto对象
+        for (FileData fileData : fileBatch.getFiles()) {
+            BatchProto.FileData.Builder fileDataBuilder = BatchProto.FileData.newBuilder();
+            fileDataBuilder.setPairId(fileData.getPairId());
+            fileDataBuilder.setTableId(fileData.getTableId());
+            if (fileData.getNameSpace() != null) {
+                fileDataBuilder.setNamespace(fileData.getNameSpace());
             }
+            if (fileData.getPath() != null) {
+                fileDataBuilder.setPath(fileData.getPath());
+            }
+            fileDataBuilder.setEventType(fileData.getEventType().getValue());
+            fileDataBuilder.setSize(fileData.getSize());
+            fileDataBuilder.setLastModifiedTime(fileData.getLastModifiedTime());
 
-            // 放到json中
-            json.put(ClassUtils.getShortClassName(fileBatch.getClass()), fileBatchBuilder.build().toByteArray());
+            fileBatchBuilder.addFiles(fileDataBuilder.build());// 添加一条fileData记录
         }
-
-        // 进行持久化
-        byte[] bytes = JsonUtils.marshalToByte(json);// 序列化
-        EncryptedData encryptedData = EncryptUtils.encrypt(bytes);
         // 处理构造对应的文件url
         String filename = buildFileName(rowBatch.getIdentity(), ClassUtils.getShortClassName(dbBatch.getClass()));
+        // 写入数据
         File file = new File(htdocsDir, filename);
+        OutputStream output = null;
         try {
-            NioUtils.write(encryptedData.getData(), file);
+            output = new BufferedOutputStream(new FileOutputStream(file));
+            com.alibaba.otter.node.etl.model.protobuf.BatchProto.RowBatch rowBatchProto = rowBatchBuilder.build();
+            output.write(ByteUtils.int2bytes(rowBatchProto.getSerializedSize()));//输出大小
+            rowBatchProto.writeTo(output);//输出row batch
+
+            com.alibaba.otter.node.etl.model.protobuf.BatchProto.FileBatch fileBatchProto = fileBatchBuilder.build();
+            output.write(ByteUtils.int2bytes(fileBatchProto.getSerializedSize()));//输出大小
+            fileBatchProto.writeTo(output); //输出file batch
+            output.flush();
         } catch (IOException e) {
             throw new PipeException("write_byte_error", e);
+        } finally {
+            IOUtils.closeQuietly(output);
         }
 
         HttpPipeKey key = new HttpPipeKey();
-        key.setCrc(encryptedData.getCrc());
-        key.setKey(encryptedData.getKey());
         key.setUrl(remoteUrlBuilder.getUrl(rowBatch.getIdentity().getPipelineId(), filename));
         key.setDataType(PipeDataType.DB_BATCH);
         key.setIdentity(rowBatch.getIdentity());
+        Pipeline pipeline = configClientService.findPipeline(rowBatch.getIdentity().getPipelineId());
+        if (pipeline.getParameters().getUseFileEncrypt()) {
+            // 加密处理
+            EncryptedData encryptedData = encryptFile(file);
+            key.setKey(encryptedData.getKey());
+            key.setCrc(encryptedData.getCrc());
+        }
+
         return key;
     }
 
@@ -182,92 +194,90 @@ public class RowDataHttpPipe extends AbstractHttpPipe<DbBatch, HttpPipeKey> {
             dataRetriever.disconnect();
         }
 
+        // 处理下有加密的数据
+        if (StringUtils.isNotEmpty(key.getKey()) && StringUtils.isNotEmpty(key.getCrc())) {
+            decodeFile(archiveFile, key.getKey(), key.getCrc());
+        }
+
+        InputStream input = null;
+        JSONReader reader = null;
         try {
-            byte[] bytes = NioUtils.read(archiveFile);
-            EncryptedData encryptedData = new EncryptedData(bytes, key.getKey(), key.getCrc());
-            byte[] protobytes = EncryptUtils.decrypt(encryptedData);
-            Map data = JsonUtils.unmarshalFromByte(protobytes, Map.class);
-
-            String rowBatchKey = ClassUtils.getShortClassName(RowBatch.class);
-            // fastjson bug，byte[]数据无法正常反序列，base64手工反解密
-            byte[] rowBatchBytes = ByteUtils.base64StringToBytes((String) data.get(rowBatchKey));
+            input = new BufferedInputStream(new FileInputStream(archiveFile));
             DbBatch dbBatch = new DbBatch();
-            if (rowBatchBytes != null) {
-                BatchProto.RowBatch rowbatchProto = BatchProto.RowBatch.parseFrom(rowBatchBytes);
-                // 构造原始的model对象
-                RowBatch rowBatch = new RowBatch();
-                rowBatch.setIdentity(build(rowbatchProto.getIdentity()));
-                for (BatchProto.RowData rowDataProto : rowbatchProto.getRowsList()) {
-                    EventData eventData = new EventData();
-                    eventData.setPairId(rowDataProto.getPairId());
-                    eventData.setTableId(rowDataProto.getTableId());
-                    eventData.setTableName(rowDataProto.getTableName());
-                    eventData.setSchemaName(rowDataProto.getSchemaName());
-                    eventData.setEventType(EventType.valuesOf(rowDataProto.getEventType()));
-                    eventData.setExecuteTime(rowDataProto.getExecuteTime());
-                    // add by ljh at 2012-10-31
-                    if (StringUtils.isNotEmpty(rowDataProto.getSyncMode())) {
-                        eventData.setSyncMode(SyncMode.valuesOf(rowDataProto.getSyncMode()));
-                    }
-                    if (StringUtils.isNotEmpty(rowDataProto.getSyncConsistency())) {
-                        eventData.setSyncConsistency(SyncConsistency.valuesOf(rowDataProto.getSyncConsistency()));
-                    }
-                    // 处理主键
-                    List<EventColumn> keys = new ArrayList<EventColumn>();
-                    for (BatchProto.Column columnProto : rowDataProto.getKeysList()) {
-                        keys.add(buildColumn(columnProto));
-                    }
-                    eventData.setKeys(keys);
-                    // 处理old主键
-                    if (CollectionUtils.isEmpty(rowDataProto.getOldKeysList()) == false) {
-                        List<EventColumn> oldKeys = new ArrayList<EventColumn>();
-                        for (BatchProto.Column columnProto : rowDataProto.getKeysList()) {
-                            oldKeys.add(buildColumn(columnProto));
-                        }
-                        eventData.setOldKeys(oldKeys);
-                    }
-                    // 处理具体的column value
-                    List<EventColumn> columns = new ArrayList<EventColumn>();
-                    for (BatchProto.Column columnProto : rowDataProto.getColumnsList()) {
-                        columns.add(buildColumn(columnProto));
-                    }
-                    eventData.setColumns(columns);
-
-                    eventData.setRemedy(rowDataProto.getRemedy());
-                    eventData.setSize(rowDataProto.getSize());
-                    // 添加到总记录
-                    rowBatch.merge(eventData);
+            byte[] lengthBytes = new byte[4];
+            input.read(lengthBytes);
+            int length = ByteUtils.bytes2int(lengthBytes);
+            BatchProto.RowBatch rowbatchProto = BatchProto.RowBatch.parseFrom(new LimitedInputStream(input, length));
+            // 构造原始的model对象
+            RowBatch rowBatch = new RowBatch();
+            rowBatch.setIdentity(build(rowbatchProto.getIdentity()));
+            for (BatchProto.RowData rowDataProto : rowbatchProto.getRowsList()) {
+                EventData eventData = new EventData();
+                eventData.setPairId(rowDataProto.getPairId());
+                eventData.setTableId(rowDataProto.getTableId());
+                eventData.setTableName(rowDataProto.getTableName());
+                eventData.setSchemaName(rowDataProto.getSchemaName());
+                eventData.setEventType(EventType.valuesOf(rowDataProto.getEventType()));
+                eventData.setExecuteTime(rowDataProto.getExecuteTime());
+                // add by ljh at 2012-10-31
+                if (StringUtils.isNotEmpty(rowDataProto.getSyncMode())) {
+                    eventData.setSyncMode(SyncMode.valuesOf(rowDataProto.getSyncMode()));
                 }
-                dbBatch.setRowBatch(rowBatch);
-            }
-            String fileBatchKey = ClassUtils.getShortClassName(FileBatch.class);
-            String fileBatchStr = (String) data.get(fileBatchKey);
-            if (StringUtils.isNotEmpty(fileBatchStr)) { // 判断下是否存在file batch记录
-                byte[] fileBatchBytes = ByteUtils.base64StringToBytes(fileBatchStr);
-                if (fileBatchBytes != null) {
-                    BatchProto.FileBatch filebatchProto = BatchProto.FileBatch.parseFrom(fileBatchBytes);
-                    // 构造原始的model对象
-                    FileBatch fileBatch = new FileBatch();
-                    fileBatch.setIdentity(build(filebatchProto.getIdentity()));
-                    for (BatchProto.FileData fileDataProto : filebatchProto.getFilesList()) {
-                        FileData fileData = new FileData();
-                        fileData.setPairId(fileDataProto.getPairId());
-                        fileData.setTableId(fileDataProto.getTableId());
-                        fileData.setEventType(EventType.valuesOf(fileDataProto.getEventType()));
-                        fileData.setLastModifiedTime(fileDataProto.getLastModifiedTime());
-                        fileData.setNameSpace(fileDataProto.getNamespace());
-                        fileData.setPath(fileDataProto.getPath());
-                        fileData.setSize(fileDataProto.getSize());
-                        // 添加到filebatch中
-                        fileBatch.getFiles().add(fileData);
-                    }
-                    dbBatch.setFileBatch(fileBatch);
+                if (StringUtils.isNotEmpty(rowDataProto.getSyncConsistency())) {
+                    eventData.setSyncConsistency(SyncConsistency.valuesOf(rowDataProto.getSyncConsistency()));
                 }
-            }
+                // 处理主键
+                List<EventColumn> keys = new ArrayList<EventColumn>();
+                for (BatchProto.Column columnProto : rowDataProto.getKeysList()) {
+                    keys.add(buildColumn(columnProto));
+                }
+                eventData.setKeys(keys);
+                // 处理old主键
+                if (CollectionUtils.isEmpty(rowDataProto.getOldKeysList()) == false) {
+                    List<EventColumn> oldKeys = new ArrayList<EventColumn>();
+                    for (BatchProto.Column columnProto : rowDataProto.getOldKeysList()) {
+                        oldKeys.add(buildColumn(columnProto));
+                    }
+                    eventData.setOldKeys(oldKeys);
+                }
+                // 处理具体的column value
+                List<EventColumn> columns = new ArrayList<EventColumn>();
+                for (BatchProto.Column columnProto : rowDataProto.getColumnsList()) {
+                    columns.add(buildColumn(columnProto));
+                }
+                eventData.setColumns(columns);
 
+                eventData.setRemedy(rowDataProto.getRemedy());
+                eventData.setSize(rowDataProto.getSize());
+                // 添加到总记录
+                rowBatch.merge(eventData);
+            }
+            dbBatch.setRowBatch(rowBatch);
+
+            input.read(lengthBytes);
+            length = ByteUtils.bytes2int(lengthBytes);
+            BatchProto.FileBatch filebatchProto = BatchProto.FileBatch.parseFrom(new LimitedInputStream(input, length));
+            // 构造原始的model对象
+            FileBatch fileBatch = new FileBatch();
+            fileBatch.setIdentity(build(filebatchProto.getIdentity()));
+            for (BatchProto.FileData fileDataProto : filebatchProto.getFilesList()) {
+                FileData fileData = new FileData();
+                fileData.setPairId(fileDataProto.getPairId());
+                fileData.setTableId(fileDataProto.getTableId());
+                fileData.setEventType(EventType.valuesOf(fileDataProto.getEventType()));
+                fileData.setLastModifiedTime(fileDataProto.getLastModifiedTime());
+                fileData.setNameSpace(fileDataProto.getNamespace());
+                fileData.setPath(fileDataProto.getPath());
+                fileData.setSize(fileDataProto.getSize());
+                // 添加到filebatch中
+                fileBatch.getFiles().add(fileData);
+            }
+            dbBatch.setFileBatch(fileBatch);
             return dbBatch;
         } catch (IOException e) {
             throw new PipeException("deserial_error", e);
+        } finally {
+            IOUtils.closeQuietly(reader);
         }
     }
 

@@ -1,16 +1,18 @@
 /*
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
+ * Copyright (C) 2010-2101 Alibaba Group Holding Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package com.alibaba.otter.shared.etl.model;
 
@@ -34,7 +36,7 @@ public class EventData implements ObjectData, Serializable {
     private static final long serialVersionUID = -7071677425383765372L;
 
     /**
-     * otter内部维护的一套tableId，区别与从eromanga中得到的tableId.
+     * otter内部维护的一套tableId，与manager中得到的table Id对应
      */
     private long              tableId          = -1;
 
@@ -43,7 +45,7 @@ public class EventData implements ObjectData, Serializable {
     private String            schemaName;
 
     /**
-     * 变更数据的业务类型(I/U/D/C/A/E),与ErosaProtocol中定义的EventType一致.
+     * 变更数据的业务类型(I/U/D/C/A/E),与canal中的EntryProtocol中定义的EventType一致.
      */
     private EventType         eventType;
 
@@ -62,6 +64,9 @@ public class EventData implements ObjectData, Serializable {
      */
     private List<EventColumn> keys             = new ArrayList<EventColumn>();
 
+    /**
+     * 非主键的其他字段
+     */
     private List<EventColumn> columns          = new ArrayList<EventColumn>();
 
     // ====================== 运行过程中对数据的附加属性 =============================
@@ -71,7 +76,7 @@ public class EventData implements ObjectData, Serializable {
     private long              size             = 1024;
 
     /**
-     * 同步映射的id
+     * 同步映射关系的id
      */
     private long              pairId           = -1;
 
