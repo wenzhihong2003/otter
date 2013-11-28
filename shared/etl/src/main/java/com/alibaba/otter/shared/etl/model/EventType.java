@@ -56,7 +56,27 @@ public enum EventType {
     /**
      * Query.
      */
-    QUERY("Q");
+    QUERY("Q"),
+
+    /**
+     * Truncate.
+     */
+    TRUNCATE("T"),
+
+    /**
+     * rename.
+     */
+    RENAME("R"),
+
+    /**
+     * create index.
+     */
+    CINDEX("CI"),
+
+    /**
+     * drop index.
+     */
+    DINDEX("DI");
 
     private String value;
 
@@ -90,6 +110,30 @@ public enum EventType {
 
     public boolean isQuery() {
         return this.equals(EventType.QUERY);
+    }
+
+    public boolean isTruncate() {
+        return this.equals(EventType.TRUNCATE);
+    }
+
+    public boolean isRename() {
+        return this.equals(EventType.RENAME);
+    }
+
+    public boolean isCindex() {
+        return this.equals(EventType.CINDEX);
+    }
+
+    public boolean isDindex() {
+        return this.equals(EventType.DINDEX);
+    }
+
+    public boolean isDdl() {
+        return isCreate() || isAlter() || isErase() || isTruncate() || isRename() || isCindex() || isDindex();
+    }
+
+    public boolean isDml() {
+        return isInsert() || isUpdate() || isDelete();
     }
 
     public static EventType valuesOf(String value) {

@@ -90,6 +90,9 @@
 				<fm-validators:custom-error id="invalidPipelineName">
 					<message>插入的Pipeline在该Channel节点下有重名</message>
 				</fm-validators:custom-error>
+				<fm-validators:custom-error id="invalidDestinationName">
+					<message>canal已经被其他pipeline所关联</message>
+				</fm-validators:custom-error>
 			</field>
 			<field name="id" displayName="pipeline的id" />
 			<field name="channelId" displayName="关联的ChannelId" />
@@ -166,7 +169,8 @@
 			</field>
 			<field name="useBatch" displayName="使用batch" />
 			<field name="needDeleteColumns" displayName="删除类型需要全字段" />
-			<field name="skipLoadException" displayName="是否跳过Load异常" />
+			<field name="skipLoadException" displayName="跳过Load异常" />
+			<field name="skipDdlException" displayName="跳过ddl异常" />
 			<field name="skipFreedom" displayName="跳过自由门数据" />
 			<field name="arbitrateMode" displayName="仲裁器调度模式" />
 			<field name="lbAlgorithm" displayName="负载均衡算法" />
@@ -206,6 +210,7 @@
 			</field>
 			<field name="channelInfo" displayName="同步标记" />
 			<field name="dryRun" displayName="DryRun模式" />
+			<field name="ddlSync" displayName="支持ddl同步" />
 			<field name="batchTimeout" displayName="获取批次数据超时时间">
 				<fm-validators:if test="selectorMode.value == 'Canal'">
 					<fm-validators:required-validator>
@@ -253,17 +258,19 @@
 					<message>左右映射关系数量不一致</message>
 				</fm-validators:custom-error>
 			</field>
+			<field name="id" displayName="id" />
 			<field name="dltTarget_l" displayName="源字段集合" />
 			<field name="dltTarget_r" displayName="目标字段集合" />
 		</group>
 
 		<!-- - ======== - 字段组 - ======== -->
 		<group name="columnPairGroupInfo" extends="csrfCheck">
-			<field name="formColumnPairError">
-				<fm-validators:custom-error id="invalidColumnPair">
-					<message>左右映射关系数量不一致</message>
+			<field name="formColumnPairGroupError">
+				<fm-validators:custom-error id="invalidColumnPairGroup">
+					<message>映射组出错</message>
 				</fm-validators:custom-error>
 			</field>
+			<field name="id" displayName="id" />
 			<field name="groupResult" displayName="字段组集合" />
 		</group>
 
@@ -419,7 +426,7 @@
 		<group name="alarmRuleInfo" extends="csrfCheck">
 			<field name="formAlarmRuleError">
 				<fm-validators:custom-error id="invalidAlarmRule">
-					<message>数据库中存在重复的Node配置(可能原因：Node重复，或者IP+PORT重复)</message>
+					<message>错误的监控配置</message>
 				</fm-validators:custom-error>
 			</field>
 			<field name="id" displayName="监控的ID" />
@@ -465,7 +472,23 @@
 					<message>${displayName} 必须是大于0的整数</message>
 				</fm-validators:number-validator>
 			</field>
-			<field name="externalIp" displayName="外部ip" />
+			<field name="mbeanPort" displayName="MBean端口">
+				<!-- <required-validator> <message>必须填写${displayName}</message> </required-validator> -->
+				<fm-validators:number-validator>
+					<message>${displayName} 必须是数字且是整数</message>
+				</fm-validators:number-validator>
+				<fm-validators:number-validator greaterThan="0">
+					<message>${displayName} 必须是大于0的整数</message>
+				</fm-validators:number-validator>
+			</field>
+			<field name="externalIp" displayName="外部IP">
+				<fm-validators:if test="useExternalIp.value">
+					<fm-validators:required-validator>
+						<message>启用外部IP通讯时必须填写${displayName}</message>
+					</fm-validators:required-validator>
+				</fm-validators:if>
+			</field>
+			<field name="useExternalIp" displayName="启用外部IP" />
 			<field name="autoKeeperClusterId" displayName="zookeeper集群" />
 		</group>
 
@@ -595,6 +618,12 @@
 					<message>必须填写${displayName}</message>
 				</fm-validators:required-validator>
 			</field>
+			<field name="defaultAlarmReceiver" displayName="默认报警联系人">
+				<fm-validators:required-validator>
+					<message>必须填写${displayName}</message>
+				</fm-validators:required-validator>
+			</field>
+			<field name="alarmReceiver" displayName="自定义报警联系人"/>
 		</group>
 
 		<!-- - ======== - canal info - ======== -->
@@ -611,6 +640,11 @@
 
 		<!-- - ======== - canalParameter info - ======== -->
 		<group name="canalParameterInfo" extends="csrfCheck">
+			<field name="formHeartBeatError">
+				<fm-validators:custom-error id="invaliedHeartBeat">
+					<message>心跳SQL不允许使用select,建议为insert/update,定时产生binlog数据</message>
+				</fm-validators:custom-error>
+			</field>
 			<field name="id" displayName="canal ID" />
 			<field name="runMode" displayName="运行模式" />
 			<field name="clusterMode" displayName="集群模式" />

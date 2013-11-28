@@ -80,8 +80,8 @@ public class TableStatServiceImpl implements TableStatService, InitializingBean 
                         if (stat.getEndTime().after(old.getEndTime())) {
                             old.setEndTime(stat.getEndTime());
                         }
-                        if (stat.getStartTime().before(stat.getStartTime())) {
-                            stat.setStartTime(stat.getStartTime());
+                        if (stat.getStartTime().before(old.getStartTime())) {
+                            old.setStartTime(stat.getStartTime());
                         }
                     } else {
                         tableStats.put(stat.getDataMediaPairId(), stat);
@@ -145,10 +145,10 @@ public class TableStatServiceImpl implements TableStatService, InitializingBean 
         synchronized (tableStats) {
             // 需要做同步，避免delay数据丢失
             Collection<TableStat> stats = tableStats.values();
-            tableStats.clear();
             for (TableStat stat : stats) {
                 insertBehaviorHistory(stat);
             }
+            tableStats.clear();
         }
     }
 

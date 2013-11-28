@@ -120,7 +120,7 @@ public class StatsRemoteServiceImpl implements StatsRemoteService {
         DelayStat stat = new DelayStat();
         stat.setPipelineId(count.getPipelineId());
         stat.setDelayNumber(0L); // 不再记录堆积量
-        stat.setDelayTime(count.getTime()); // 只记录延迟时间
+        stat.setDelayTime(count.getTime() >= 0 ? count.getTime() : 0); // 只记录延迟时间，负数直接归为0
 
         if (statUnit <= 0) {
             delayStatService.createDelayStat(stat);
@@ -151,8 +151,8 @@ public class StatsRemoteServiceImpl implements StatsRemoteService {
                             old.setEndTime(stat.getEndTime());
                         }
 
-                        if (stat.getStartTime().before(stat.getStartTime())) {
-                            stat.setStartTime(stat.getStartTime());
+                        if (stat.getStartTime().before(old.getStartTime())) {
+                            old.setStartTime(stat.getStartTime());
                         }
                     } else {
                         data.put(stat.getType(), stat);

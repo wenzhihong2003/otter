@@ -1,5 +1,4 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 	    <groupId>org.sonatype.oss</groupId>
@@ -7,10 +6,10 @@
 	    <version>7</version>
 	</parent>
 	<groupId>com.alibaba.otter</groupId>
-	<artifactId>otter.parent</artifactId>
+	<artifactId>otter</artifactId>
 	<packaging>pom</packaging>
 	<name>otter</name>
-	<version>4.2.1-SNAPSHOT</version>
+	<version>4.2.7-SNAPSHOT</version>
 	<inceptionYear>2011</inceptionYear>
 	<url>http://github.com/alibaba/otter</url>
 	<organization>
@@ -54,6 +53,16 @@
 	
 	<repositories>
 		<repository>
+			<id>central</id>
+			<url>http://repo1.maven.org/maven2</url>
+			<releases>
+				<enabled>true</enabled>
+			</releases>
+			<snapshots>
+				<enabled>false</enabled>
+			</snapshots>
+		</repository>
+		<repository>
 			<id>java.net</id>
 			<url>http://download.java.net/maven/2/</url>
 			<releases>
@@ -85,6 +94,17 @@
 				<enabled>true</enabled>
 			</snapshots>
 		</repository>
+		<repository>
+			<id>sonatype-release</id>
+			<name>sonatype-release</name>
+			<url>https://oss.sonatype.org/service/local/repositories/releases/content</url>
+			<releases>
+				<enabled>false</enabled>
+			</releases>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
+		</repository>
 	</repositories>
 	
 	<properties>
@@ -95,9 +115,10 @@
         <java_source_version>1.6</java_source_version>
         <java_target_version>1.6</java_target_version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<file_encoding>UTF-8</file_encoding>
 		<spring-version>3.1.2.RELEASE</spring-version>
 		<jetty_verion>8.1.7.v20120910</jetty_verion>
-		<otter_canal_version>1.0.9-SNAPSHOT</otter_canal_version>
+		<otter_canal_version>1.0.14</otter_canal_version>
 	</properties>
 	
 	<modules>
@@ -153,6 +174,11 @@
 				<groupId>com.google.guava</groupId>
 				<artifactId>guava</artifactId>
 				<version>r08</version>
+			</dependency>
+			<dependency>
+				<groupId>com.google.protobuf</groupId>
+				<artifactId>protobuf-java</artifactId>
+				<version>2.4.1</version>
 			</dependency>
 			<!-- zookeeper -->
 			<dependency>
@@ -296,6 +322,21 @@
 					<target>${java_target_version}</target>
 					<encoding>${file_encoding}</encoding>
 				</configuration>
+			</plugin>
+			<plugin>
+			   <groupId>org.apache.maven.plugins</groupId>  
+			   <artifactId>maven-eclipse-plugin</artifactId>  
+			   <version>2.5.1</version>  
+			   <configuration>  
+				  <additionalConfig>  
+					 <file>  
+						<name>.settings/org.eclipse.core.resources.prefs</name>  
+						<content>  
+						   <![CDATA[eclipse.preferences.version=1${line.separator}encoding/<project>=${file_encoding}${line.separator}]]>  
+						</content>  
+					 </file>  
+				  </additionalConfig>  
+			   </configuration>  
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

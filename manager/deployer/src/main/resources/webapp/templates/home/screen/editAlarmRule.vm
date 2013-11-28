@@ -33,13 +33,11 @@ $control.setTemplate("home:navigation.vm")
         <th width="300">监控项目：</th>
         <td width="329">
 			<select name="$alarmRuleGroup.monitorName.key" id="select">
-            	<option value="QUEUESIZE" #if($alarmRule.monitorName.isQueueSize()) selected="selected" #end>堆积</option>
                 <option value="DELAYTIME" #if($alarmRule.monitorName.isDelayTime()) selected="selected" #end>延迟</option>
 				<option value="PIPELINETIMEOUT" #if($alarmRule.monitorName.isPipelineTimeout()) selected="selected" #end>Pipeline超时</option>
 				<option value="PROCESSTIMEOUT" #if($alarmRule.monitorName.isProcessTimeout()) selected="selected" #end>Process超时</option>
 				<option value="POSITIONTIMEOUT" #if($alarmRule.monitorName.isPositionTimeout()) selected="selected" #end>Position超时</option>
 				<option value="EXCEPTION" #if($alarmRule.monitorName.isException()) selected="selected" #end>异常</option>
-				<option value="PAUSED" #if($alarmRule.monitorName.isPaused()) selected="selected" #end>挂起</option>
             </select><span class="red">*</span>
 		</td>
       </tr>

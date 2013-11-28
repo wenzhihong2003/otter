@@ -29,6 +29,7 @@ import org.apache.commons.lang.StringUtils;
 
 import com.alibaba.otter.canal.instance.manager.model.CanalParameter.DataSourcing;
 import com.alibaba.otter.canal.instance.manager.model.CanalParameter.SourcingType;
+import com.alibaba.otter.shared.common.utils.version.VersionInfo;
 
 /**
  * 格式化一下页面输出的数字内容
@@ -141,15 +142,15 @@ public class NumberFormatUtil {
 
         List<String> result = new ArrayList<String>();
         if (hour > 0) {
-            result.add(hour + "h");
+            result.add(hour + " h");
         }
         if (minute > 0) {
-            result.add(minute + "m");
+            result.add(minute + " m");
         }
 
         if (t > 0) {
             DecimalFormat format = new DecimalFormat(PATTERN);
-            result.add(format.format((t * 1.0) / 1000) + "s");
+            result.add(format.format((t * 1.0) / 1000) + " s");
         }
 
         if (result.size() == 0) {
@@ -221,5 +222,9 @@ public class NumberFormatUtil {
         } else {
             return originalContent;
         }
+    }
+
+    public String getManagerVersionInfo() {
+        return VersionInfo.getVersion() + " [ r" + VersionInfo.getRevision() + " ] @ " + VersionInfo.getDate();
     }
 }

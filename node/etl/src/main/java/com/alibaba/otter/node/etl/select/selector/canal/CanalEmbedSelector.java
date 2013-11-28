@@ -86,6 +86,7 @@ public class CanalEmbedSelector implements OtterSelector {
     private String                 filter;
     private int                    batchSize     = 10000;
     private long                   batchTimeout  = -1L;
+    private boolean                ddlSync       = true;
 
     private CanalConfigClient      canalConfigClient;
     private volatile boolean       running       = false;                                            // 是否处于运行中
@@ -110,6 +111,7 @@ public class CanalEmbedSelector implements OtterSelector {
         destination = pipeline.getParameters().getDestinationName();
         batchSize = pipeline.getParameters().getMainstemBatchsize();
         batchTimeout = pipeline.getParameters().getBatchTimeout();
+        ddlSync = pipeline.getParameters().getDdlSync();
         if (pipeline.getParameters().getDumpSelector() != null) {
             dump = pipeline.getParameters().getDumpSelector();
         }
@@ -125,27 +127,28 @@ public class CanalEmbedSelector implements OtterSelector {
                 final OtterAlarmHandler otterAlarmHandler = new OtterAlarmHandler();
                 otterAlarmHandler.setPipelineId(pipelineId);
                 OtterContextLocator.autowire(otterAlarmHandler); // 注入一下spring资源
-                //设置下slaveId，保证多个piplineId下重复引用时不重复
-                long slaveId = 10000;//默认基数
+                // 设置下slaveId，保证多个piplineId下重复引用时不重复
+                long slaveId = 10000;// 默认基数
                 if (canal.getCanalParameter().getSlaveId() != null) {
                     slaveId = canal.getCanalParameter().getSlaveId();
                 }
                 canal.getCanalParameter().setSlaveId(slaveId + pipelineId);
+                canal.getCanalParameter().setDdlIsolation(ddlSync);
 
                 CanalInstanceWithManager instance = new CanalInstanceWithManager(canal, filter) {
 
                     protected CanalHAController initHaController() {
                         HAMode haMode = parameters.getHaMode();
                         if (haMode.isMedia()) {
-                            return new MediaHAController(parameters.getMediaGroup(), parameters.getDbUsername(),
-                                                         parameters.getDbPassword(),
-                                                         parameters.getDefaultDatabaseName());
+                            return new MediaHAController(parameters.getMediaGroup(),
+                                parameters.getDbUsername(),
+                                parameters.getDbPassword(),
+                                parameters.getDefaultDatabaseName());
                         } else {
                             return super.initHaController();
                         }
                     }
 
-                    @Override
                     protected void startEventParserInternal(CanalEventParser parser) {
                         super.startEventParserInternal(parser);
 
@@ -176,10 +179,9 @@ public class CanalEmbedSelector implements OtterSelector {
                 if (eventSink instanceof AbstractCanalEventSink) {
                     handler = new OtterDownStreamHandler();
                     handler.setPipelineId(pipelineId);
-                    handler.setDetectingEnable(canal.getCanalParameter().getDetectingEnable());
                     handler.setDetectingIntervalInSeconds(canal.getCanalParameter().getDetectingIntervalInSeconds());
                     OtterContextLocator.autowire(handler); // 注入一下spring资源
-                    ((AbstractCanalEventSink) eventSink).addHandler(handler);
+                    ((AbstractCanalEventSink) eventSink).addHandler(handler, 0); // 添加到开头
                     handler.start();
                 }
 

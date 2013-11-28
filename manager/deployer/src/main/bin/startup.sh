@@ -63,7 +63,7 @@ in
 	else 
 		if [ "$1" = "debug" ]; then
 			DEBUG_PORT=$2
-			DEBUG_SUSPEND="y"
+			DEBUG_SUSPEND="n"
 			JAVA_DEBUG_OPT="-Xdebug -Xnoagent -Djava.compiler=NONE -Xrunjdwp:transport=dt_socket,address=$DEBUG_PORT,server=y,suspend=$DEBUG_SUSPEND"
 		fi
      fi;;
@@ -81,7 +81,7 @@ else
 fi
 
 JAVA_OPTS=" $JAVA_OPTS -Djava.awt.headless=true -Djava.net.preferIPv4Stack=true -Dfile.encoding=UTF-8"
-OTTER_OPTS="-DappName=otter-manager -Dlogback.configurationFile=$logback_configurationFile -Dotter.conf=$otter_conf"
+OTTER_OPTS="-DappName=otter-manager -Ddubbo.application.logger=slf4j -Dlogback.configurationFile=$logback_configurationFile -Dotter.conf=$otter_conf"
 
 if [ -e $otter_conf -a -e $logback_configurationFile ]
 then 

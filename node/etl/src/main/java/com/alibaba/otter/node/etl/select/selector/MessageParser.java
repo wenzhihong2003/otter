@@ -17,6 +17,7 @@
 package com.alibaba.otter.node.etl.select.selector;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -101,7 +102,8 @@ public class MessageParser {
                         String tableName = entry.getHeader().getTableName();
                         // 判断是否是回环表retl_mark
                         boolean isMarkTable = schemaName.equalsIgnoreCase(pipeline.getParameters().getSystemSchema())
-                                              && tableName.equalsIgnoreCase(pipeline.getParameters().getSystemMarkTable());
+                                              && tableName.equalsIgnoreCase(pipeline.getParameters()
+                                                  .getSystemMarkTable());
                         if (isMarkTable) {
                             RowChange rowChange = RowChange.parseFrom(entry.getStoreValue());
                             if (!rowChange.getIsDdl()) {
@@ -153,7 +155,8 @@ public class MessageParser {
                                     eventData.setSize(eachSize);// 记录一下大小
                                     if (needLoopback) {// 针对需要回环同步的
                                         // 如果延迟超过指定的阀值，则设置为需要反查db
-                                        if (now - eventData.getExecuteTime() > 1000 * pipeline.getParameters().getRemedyDelayThresoldForMedia()) {
+                                        if (now - eventData.getExecuteTime() > 1000 * pipeline.getParameters()
+                                            .getRemedyDelayThresoldForMedia()) {
                                             eventData.setSyncConsistency(SyncConsistency.MEDIA);
                                         } else {
                                             eventData.setSyncConsistency(SyncConsistency.BASE);
@@ -194,7 +197,8 @@ public class MessageParser {
                         eventData.setSize(eachSize);// 记录一下大小
                         if (needLoopback) {// 针对需要回环同步的
                             // 如果延迟超过指定的阀值，则设置为需要反查db
-                            if (now - eventData.getExecuteTime() > 1000 * pipeline.getParameters().getRemedyDelayThresoldForMedia()) {
+                            if (now - eventData.getExecuteTime() > 1000 * pipeline.getParameters()
+                                .getRemedyDelayThresoldForMedia()) {
                                 eventData.setSyncConsistency(SyncConsistency.MEDIA);
                             } else {
                                 eventData.setSyncConsistency(SyncConsistency.BASE);
@@ -226,8 +230,8 @@ public class MessageParser {
     private int checkLoopback(Pipeline pipeline, RowData rowData) {
         // 检查channel_info字段
         // 首先检查下after记录，从无变有的过程，一般出现在事务头
-        Column infokColumn = getColumnIgnoreCase(rowData.getAfterColumnsList(),
-                                                 pipeline.getParameters().getSystemMarkTableInfo());
+        Column infokColumn = getColumnIgnoreCase(rowData.getAfterColumnsList(), pipeline.getParameters()
+            .getSystemMarkTableInfo());
 
         // 匹配对应的channelInfo，如果以_SYNC结尾，则认为需要忽略
         if (infokColumn != null && StringUtils.endsWithIgnoreCase(infokColumn.getValue(), RETL_CLIENT_FLAG)) {
@@ -240,8 +244,8 @@ public class MessageParser {
             return 2;
         }
 
-        infokColumn = getColumnIgnoreCase(rowData.getBeforeColumnsList(),
-                                          pipeline.getParameters().getSystemMarkTableInfo());
+        infokColumn = getColumnIgnoreCase(rowData.getBeforeColumnsList(), pipeline.getParameters()
+            .getSystemMarkTableInfo());
         // 匹配对应的channelInfo，如果以_SYNC结尾，则认为需要忽略
         if (infokColumn != null && StringUtils.endsWithIgnoreCase(infokColumn.getValue(), RETL_CLIENT_FLAG)) {
             return 1;
@@ -254,15 +258,15 @@ public class MessageParser {
         }
 
         // 检查channel_id字段
-        Column markColumn = getColumnIgnoreCase(rowData.getAfterColumnsList(),
-                                                pipeline.getParameters().getSystemMarkTableColumn());
+        Column markColumn = getColumnIgnoreCase(rowData.getAfterColumnsList(), pipeline.getParameters()
+            .getSystemMarkTableColumn());
         // 匹配对应的channel id
         if (markColumn != null && pipeline.getChannelId().equals(Long.parseLong(markColumn.getValue()))) {
             return 2;
         }
 
-        markColumn = getColumnIgnoreCase(rowData.getBeforeColumnsList(),
-                                         pipeline.getParameters().getSystemMarkTableColumn());
+        markColumn = getColumnIgnoreCase(rowData.getBeforeColumnsList(), pipeline.getParameters()
+            .getSystemMarkTableColumn());
         if (markColumn != null && pipeline.getChannelId().equals(Long.parseLong(markColumn.getValue()))) {
             return 2;
         }
@@ -324,6 +328,56 @@ public class MessageParser {
             return null;
         }
 
+        String schemaName = entry.getHeader().getSchemaName();
+        String tableName = entry.getHeader().getTableName();
+        EventType eventType = EventType.valueOf(rowChange.getEventType().name());
+
+        // 处理下DDL操作
+        if (eventType.isQuery()) {
+            // 直接忽略query事件
+            return null;
+        }
+
+        // 首先判断是否为系统表
+        if (StringUtils.equalsIgnoreCase(pipeline.getParameters().getSystemSchema(), schemaName)) {
+            // do noting
+            if (eventType.isDdl()) {
+                return null;
+            }
+
+            if (StringUtils.equalsIgnoreCase(pipeline.getParameters().getSystemDualTable(), tableName)) {
+                // 心跳表数据直接忽略
+                return null;
+            }
+        } else {
+            if (eventType.isDdl()) {
+                DataMedia dataMedia = ConfigHelper.findSourceDataMedia(pipeline, schemaName, tableName);
+                // 如果EventType是CREATE/ALTER，需要reload
+                // DataMediaInfo;并且把CREATE/ALTER类型的事件丢弃掉.
+                if (eventType.isCreate() || eventType.isAlter() || eventType.isRename()) {
+                    DbDialect dbDialect = dbDialectFactory.getDbDialect(pipeline.getId(),
+                        (DbMediaSource) dataMedia.getSource());
+                    dbDialect.reloadTable(schemaName, tableName);// 更新下meta信息
+                }
+
+                boolean ddlSync = pipeline.getParameters().getDdlSync();
+                if (ddlSync) {
+                    // 处理下ddl操作
+                    EventData eventData = new EventData();
+                    eventData.setSchemaName(schemaName);
+                    eventData.setTableName(tableName);
+                    eventData.setEventType(eventType);
+                    eventData.setExecuteTime(entry.getHeader().getExecuteTime());
+                    eventData.setSql(rowChange.getSql());
+                    eventData.setDdlSchemaName(rowChange.getDdlSchemaName());
+                    eventData.setTableId(dataMedia.getId());
+                    return Arrays.asList(eventData);
+                } else {
+                    return null;
+                }
+            }
+        }
+
         List<EventData> eventDatas = new ArrayList<EventData>();
         for (RowData rowData : rowChange.getRowDatasList()) {
             EventData eventData = internParse(pipeline, entry, rowChange, rowData);
@@ -352,56 +406,26 @@ public class MessageParser {
         eventData.setSchemaName(entry.getHeader().getSchemaName());
         eventData.setEventType(EventType.valueOf(rowChange.getEventType().name()));
         eventData.setExecuteTime(entry.getHeader().getExecuteTime());
-
-        boolean useTableTransform = pipeline.getParameters().getUseTableTransform();
         EventType eventType = eventData.getEventType();
-        Table table = null;
         TableInfoHolder tableHolder = null;
 
-        if (eventType.isQuery()) {
-            // 直接忽略query事件
-            return null;
-        }
-
-        // 首先判断是否为系统表
-        if (StringUtils.equalsIgnoreCase(pipeline.getParameters().getSystemSchema(), eventData.getSchemaName())) {
-            // do noting
-            if (eventType.isCreate() || eventType.isAlter() || eventType.isErase()) {
-                return null;
-            }
-
-            if (StringUtils.equalsIgnoreCase(pipeline.getParameters().getSystemDualTable(), eventData.getTableName())) {
-                // 心跳表数据直接忽略
-                return null;
-            }
-        } else {
-            DataMedia dataMedia = ConfigHelper.findSourceDataMedia(pipeline, eventData.getSchemaName(),
-                                                                   eventData.getTableName());
-            if (dataMedia == null) {
-                throw new SelectException("the namespace = " + eventData.getSchemaName() + " name = "
-                                          + eventData.getTableName() + " dataMedia is null,please check , entry: "
-                                          + entry.toString() + " and rowdata: " + rowChange.toString());
-            }
+        if (!StringUtils.equalsIgnoreCase(pipeline.getParameters().getSystemSchema(), eventData.getSchemaName())) {
+            boolean useTableTransform = pipeline.getParameters().getUseTableTransform();
+            Table table = null;
+            DataMedia dataMedia = ConfigHelper.findSourceDataMedia(pipeline,
+                eventData.getSchemaName(),
+                eventData.getTableName());
             eventData.setTableId(dataMedia.getId());
-            if (eventType.isCreate() || eventType.isAlter() || eventType.isErase()) {
-                // 如果EventType是CREATE/ALTER，需要reload DataMediaInfo;并且把CREATE/ALTER类型的事件丢弃掉.
-                if (eventType.isCreate() || eventType.isAlter()) {
-                    DbDialect dbDialect = dbDialectFactory.getDbDialect(pipeline.getId(),
-                                                                        (DbMediaSource) dataMedia.getSource());
-                    dbDialect.reloadTable(eventData.getSchemaName(), eventData.getTableName());// 更新下meta信息
-                }
-                return null;
-            }
-
             if (useTableTransform || dataMedia.getSource().getType().isOracle()) {// oracle需要反查一次meta
                 // 如果设置了需要进行table meta转化，则反查一下table信息
                 // 比如oracle erosa解析时可能使用了非物理主键，需要直接使用，信任erosa的信息
                 DbDialect dbDialect = dbDialectFactory.getDbDialect(pipeline.getId(),
-                                                                    (DbMediaSource) dataMedia.getSource());
+                    (DbMediaSource) dataMedia.getSource());
                 table = dbDialect.findTable(eventData.getSchemaName(), eventData.getTableName());// 查询一下meta信息
                 if (table == null) {
-                    logger.warn("find table[{}.{}] is null , may be drop table.", eventData.getSchemaName(),
-                                eventData.getTableName());
+                    logger.warn("find table[{}.{}] is null , may be drop table.",
+                        eventData.getSchemaName(),
+                        eventData.getTableName());
                 }
                 tableHolder = new TableInfoHolder(dbDialect, table, useTableTransform);
             }
@@ -421,6 +445,7 @@ public class MessageParser {
         Map<String, EventColumn> oldKeyColumns = new LinkedHashMap<String, EventColumn>();
         // 有变化的非主键
         Map<String, EventColumn> notKeyColumns = new LinkedHashMap<String, EventColumn>();
+
         if (eventType.isInsert()) {
             for (Column column : afterColumns) {
                 if (isKey(tableHolder, tableName, column)) {
@@ -444,9 +469,11 @@ public class MessageParser {
             for (Column column : beforeColumns) {
                 if (isKey(tableHolder, tableName, column)) {
                     oldKeyColumns.put(column.getName(), copyEventColumn(column, true, tableHolder));
-                } else if (needAllColumns && entry.getHeader().getSourceType() == CanalEntry.Type.ORACLE) {
-                    // 针对行记录同步时，针对oracle记录一下非主键的字段，因为update时针对未变更的字段在aftercolume里没有
-                    notKeyColumns.put(column.getName(), copyEventColumn(column, isRowMode, tableHolder));
+                } else {
+                    if (needAllColumns && entry.getHeader().getSourceType() == CanalEntry.Type.ORACLE) {
+                        // 针对行记录同步时，针对oracle记录一下非主键的字段，因为update时针对未变更的字段在aftercolume里没有
+                        notKeyColumns.put(column.getName(), copyEventColumn(column, isRowMode, tableHolder));
+                    }
                 }
             }
             for (Column column : afterColumns) {
@@ -455,7 +482,8 @@ public class MessageParser {
                     keyColumns.put(column.getName(), copyEventColumn(column, true, tableHolder));
                 } else if (needAllColumns || entry.getHeader().getSourceType() == CanalEntry.Type.ORACLE
                            || column.getUpdated()) {
-                    // 在update操作时，oracle和mysql存放变更的非主键值的方式不同,oracle只有变更的字段; mysql会把变更前和变更后的字段都发出来，只需要取有变更的字段.
+                    // 在update操作时，oracle和mysql存放变更的非主键值的方式不同,oracle只有变更的字段;
+                    // mysql会把变更前和变更后的字段都发出来，只需要取有变更的字段.
                     // 如果是oracle库，after里一定为对应的变更字段
 
                     boolean isUpdate = true;
@@ -471,23 +499,46 @@ public class MessageParser {
             }
         }
 
-        if (keyColumns.isEmpty()) {
+        List<EventColumn> keys = new ArrayList<EventColumn>(keyColumns.values());
+        List<EventColumn> oldKeys = new ArrayList<EventColumn>(oldKeyColumns.values());
+        List<EventColumn> columns = new ArrayList<EventColumn>(notKeyColumns.values());
+
+        Collections.sort(keys, new EventColumnIndexComparable());
+        Collections.sort(oldKeys, new EventColumnIndexComparable());
+        Collections.sort(columns, new EventColumnIndexComparable());
+        if (!keyColumns.isEmpty()) {
+            eventData.setKeys(keys);
+            if (eventData.getEventType().isUpdate() && !oldKeys.equals(keys)) { // update类型，如果存在主键不同,则记录下old
+                                                                                // keys为变更前的主键
+                eventData.setOldKeys(oldKeys);
+            }
+            eventData.setColumns(columns);
+            // } else if (CanalEntry.Type.MYSQL ==
+            // entry.getHeader().getSourceType()) {
+            // // 只支持mysql无主键同步
+            // if (eventType.isUpdate()) {
+            // List<EventColumn> oldColumns = new ArrayList<EventColumn>();
+            // List<EventColumn> newColumns = new ArrayList<EventColumn>();
+            // for (Column column : beforeColumns) {
+            // oldColumns.add(copyEventColumn(column, true, tableHolder));
+            // }
+            //
+            // for (Column column : afterColumns) {
+            // newColumns.add(copyEventColumn(column, true, tableHolder));
+            // }
+            // Collections.sort(oldColumns, new EventColumnIndexComparable());
+            // Collections.sort(newColumns, new EventColumnIndexComparable());
+            // eventData.setOldKeys(oldColumns);// 做为老主键
+            // eventData.setKeys(newColumns);// 做为新主键，需要保证新老主键字段数量一致
+            // } else {
+            // // 针对无主键，等同为所有都是主键进行处理
+            // eventData.setKeys(columns);
+            // }
+        } else {
             throw new SelectException("this rowdata has no pks , entry: " + entry.toString() + " and rowData: "
                                       + rowData);
         }
 
-        List<EventColumn> keys = new ArrayList<EventColumn>(keyColumns.values());
-        List<EventColumn> oldKeys = new ArrayList<EventColumn>(oldKeyColumns.values());
-        List<EventColumn> columns = new ArrayList<EventColumn>(notKeyColumns.values());
-        Collections.sort(keys, new EventColumnIndexComparable());
-        Collections.sort(oldKeys, new EventColumnIndexComparable());
-        Collections.sort(columns, new EventColumnIndexComparable());
-
-        eventData.setKeys(keys);
-        if (eventData.getEventType().isUpdate() && !oldKeys.equals(keys)) { // update类型，如果存在主键不同,则记录下old keys为变更前的主键
-            eventData.setOldKeys(oldKeys);
-        }
-        eventData.setColumns(columns);
         return eventData;
     }
 
@@ -594,15 +645,16 @@ public class MessageParser {
             tableHolder.reload();
             dbColumn = tableHolder.getTable().findColumn(column.getName(), false);
             if (dbColumn == null) {
-                throw new SelectException(String.format("not found column[%s] in table[%s]", column.getName(),
-                                                        tableHolder.getTable().toVerboseString()));
+                throw new SelectException(String.format("not found column[%s] in table[%s]",
+                    column.getName(),
+                    tableHolder.getTable().toVerboseString()));
             }
         }
 
         boolean isMKey = dbColumn.isPrimaryKey();
         if (isMKey != isEKey) {
             logger.info("table [{}] column [{}] is not match , isMeky: {}, isEkey {}",
-                        new Object[] { tableName, column.getName(), isMKey, isEKey });
+                new Object[] { tableName, column.getName(), isMKey, isEKey });
         }
         return isMKey;
     }

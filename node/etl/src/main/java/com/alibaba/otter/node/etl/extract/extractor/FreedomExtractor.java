@@ -81,6 +81,9 @@ public class FreedomExtractor extends AbstractExtractor<DbBatch> {
         for (EventData eventData : eventDatas) {
             if (StringUtils.equalsIgnoreCase(bufferSchema, eventData.getSchemaName())
                 && StringUtils.equalsIgnoreCase(bufferTable, eventData.getTableName())) {
+                if (eventData.getEventType().isDdl()) {
+                    continue;
+                }
 
                 if (skipFreedom) {// 判断是否需要忽略
                     removeDatas.add(eventData);
@@ -149,7 +152,7 @@ public class FreedomExtractor extends AbstractExtractor<DbBatch> {
                         eventData.setEventType(eventType);
                         if (eventType.isUpdate()) {// 如果是update强制修改为insert，这样可以在目标端执行merge sql
                             eventData.setEventType(EventType.INSERT);
-                        } else if (eventType.isAlter() || eventType.isErase() || eventType.isCreate()) {
+                        } else if (eventType.isDdl()) {
                             dbDialect.reloadTable(eventData.getSchemaName(), eventData.getTableName());
                             removeDatas.add(eventData);// 删除当前记录
                             continue;
